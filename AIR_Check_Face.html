@@ -4,21 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Анализ внимания</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            color: #4CAF50;
+        }
+        input[type="file"] {
+            margin: 20px;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        video {
+            border: 2px solid #4CAF50;
+            margin-top: 20px;
+        }
+        #attentionStatus {
+            font-size: 24px;
+            margin-top: 20px;
+            color: #FF0000;
+        }
+        .coordinates {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        .coordinates p {
+            margin: 5px;
+        }
+    </style>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-models"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-models@2.0.0/dist/face-detection/ssd_mobilenet_v1/model.json"></script>
 </head>
 <body>
 
     <h1>Анализ внимания</h1>
-
-    <!-- Видеоплеер для отображения видео -->
+    
+    <input type="file" id="videoInput" accept="video/*">
     <video id="videoElement" width="640" height="480" controls></video>
 
     <p id="attentionStatus">Внимание: Хорошо</p>
 
+    <!-- Форма для отображения координат -->
+    <div class="coordinates">
+        <p>Координаты:</p>
+        <p id="coordX">X: 0</p>
+        <p id="coordY">Y: 0</p>
+    </div>
+
     <script>
         const videoElement = document.getElementById('videoElement');
+        const videoInput = document.getElementById('videoInput');
         const attentionStatus = document.getElementById('attentionStatus');
+        const coordX = document.getElementById('coordX');
+        const coordY = document.getElementById('coordY');
 
         let model;
         let lastFaceDetected = false;
@@ -32,12 +74,15 @@
         // Загрузка модели при старте
         loadModel();
 
-        // Получение URL видео из localStorage и установка его в плеер
-        const videoURL = localStorage.getItem('videoURL');
-        if (videoURL) {
-            videoElement.src = videoURL;
-            videoElement.play();
-        }
+        // Слушатель для загрузки видео
+        videoInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const videoURL = URL.createObjectURL(file);
+                videoElement.src = videoURL;
+                videoElement.play();
+            }
+        });
 
         // Функция для обработки видео и анализа лиц
         async function analyzeVideo() {
@@ -54,12 +99,25 @@
                         lastFaceDetected = true;
                         attentionStatus.textContent = 'Внимание: Хорошо';
                     }
+
+                    // Отображение координат первого найденного лица
+                    const face = faces[0];
+                    const xCoord = face[0]; // X координата
+                    const yCoord = face[1]; // Y координата
+
+                    // Обновляем координаты
+                    coordX.textContent = `X: ${xCoord}`;
+                    coordY.textContent = `Y: ${yCoord}`;
                 } else {
                     // Лицо не найдено в кадре
                     if (lastFaceDetected) {
                         lastFaceDetected = false;
                         attentionStatus.textContent = 'Внимание: Отвлечен';
                     }
+
+                    // Если лица нет, скрываем координаты
+                    coordX.textContent = `X: 0`;
+                    coordY.textContent = `Y: 0`;
                 }
             }
         }

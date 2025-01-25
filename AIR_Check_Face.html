@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Анализ внимания</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-models"></script>
+</head>
+<body>
+
+    <h1>Анализ внимания</h1>
+
+    <input type="file" id="videoInput" accept="video/*">
+    <video id="videoElement" width="640" height="480" controls></video>
+
+    <p id="attentionStatus">Внимание: Хорошо</p>
+
+    <script>
+        const videoElement = document.getElementById('videoElement');
+        const videoInput = document.getElementById('videoInput');
+        const attentionStatus = document.getElementById('attentionStatus');
+
+        let model;
+        let lastFaceDetected = false;
+
+        // Загрузка модели для распознавания лиц
+        async function loadModel() {
+            model = await tf.loadGraphModel('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-models@2.0.0/dist/face-detection/ssd_mobilenet_v1/model.json');
+            console.log('Модель загружена');
+        }
+
+        // Загрузка модели при старте
+        loadModel();
+
+        // Слушатель для загрузки видео
+        videoInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const videoURL = URL.createObjectURL(file);
+                videoElement.src = videoURL;
+                videoElement.play();
+            }
+        });
+
+        // Функция для обработки видео и анализа лиц
+        async function analyzeVideo() {
+            if (model && videoElement.readyState === 4) {
+                const videoTensor = tf.browser.fromPixels(videoElement);
+                const predictions = await model.executeAsync(videoTensor.expandDims(0));
+
+                // Распознавание лиц
+                const faces = predictions[0].arraySync();
+
+                if (faces.length > 0) {
+                    // Лицо найдено в кадре
+                    if (!lastFaceDetected) {
+                        lastFaceDetected = true;
+                        attentionStatus.textContent = 'Внимание: Хорошо';
+                    }
+                } else {
+                    // Лицо не найдено в кадре
+                    if (lastFaceDetected) {
+                        lastFaceDetected = false;
+                        attentionStatus.textContent = 'Внимание: Отвлечен';
+                    }
+                }
+            }
+        }
+
+        // Запуск анализа каждую секунду
+        setInterval(analyzeVideo, 1000);
+    </script>
+
+</body>
+</html>

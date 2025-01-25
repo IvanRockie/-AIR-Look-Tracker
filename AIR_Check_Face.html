@@ -11,14 +11,13 @@
 
     <h1>Анализ внимания</h1>
 
-    <input type="file" id="videoInput" accept="video/*">
+    <!-- Видеоплеер для отображения видео -->
     <video id="videoElement" width="640" height="480" controls></video>
 
     <p id="attentionStatus">Внимание: Хорошо</p>
 
     <script>
         const videoElement = document.getElementById('videoElement');
-        const videoInput = document.getElementById('videoInput');
         const attentionStatus = document.getElementById('attentionStatus');
 
         let model;
@@ -33,15 +32,12 @@
         // Загрузка модели при старте
         loadModel();
 
-        // Слушатель для загрузки видео
-        videoInput.addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const videoURL = URL.createObjectURL(file);
-                videoElement.src = videoURL;
-                videoElement.play();
-            }
-        });
+        // Получение URL видео из localStorage и установка его в плеер
+        const videoURL = localStorage.getItem('videoURL');
+        if (videoURL) {
+            videoElement.src = videoURL;
+            videoElement.play();
+        }
 
         // Функция для обработки видео и анализа лиц
         async function analyzeVideo() {

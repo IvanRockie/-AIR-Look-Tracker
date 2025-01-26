@@ -3,128 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Анализ внимания</title>
+    <title>Pose and Face Detection</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
             text-align: center;
             background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
         }
-        h1 {
-            color: #4CAF50;
+        canvas, video {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
         }
-        input[type="file"] {
-            margin: 20px;
+        #status {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 0, 0, 0.8);
+            color: #fff;
             padding: 10px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        video {
-            border: 2px solid #4CAF50;
-            margin-top: 20px;
-        }
-        #attentionStatus {
-            font-size: 24px;
-            margin-top: 20px;
-            color: #FF0000;
-        }
-        .coordinates {
-            margin-top: 20px;
-            font-size: 18px;
-        }
-        .coordinates p {
-            margin: 5px;
+            border-radius: 5px;
+            display: none;
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-models@2.0.0/dist/face-detection/ssd_mobilenet_v1/model.json"></script>
 </head>
 <body>
-
-    <h1>Анализ внимания</h1>
-    
-    <input type="file" id="videoInput" accept="video/*">
-    <video id="videoElement" width="640" height="480" controls></video>
-
-    <p id="attentionStatus">Внимание: Хорошо</p>
-
-    <!-- Форма для отображения координат -->
-    <div class="coordinates">
-        <p>Координаты:</p>
-        <p id="coordX">X: 0</p>
-        <p id="coordY">Y: 0</p>
-    </div>
+    <h1>Pose and Face Detection</h1>
+    <div id="status">Лицо не обнаружено</div>
+    <video id="video" width="640" height="480" autoplay muted></video>
+    <canvas id="output" width="640" height="480"></canvas>
 
     <script>
-        const videoElement = document.getElementById('videoElement');
-        const videoInput = document.getElementById('videoInput');
-        const attentionStatus = document.getElementById('attentionStatus');
-        const coordX = document.getElementById('coordX');
-        const coordY = document.getElementById('coordY');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('output');
+        const ctx = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
 
-        let model;
         let lastFaceDetected = false;
 
-        // Загрузка модели для распознавания лиц
-        async function loadModel() {
-            model = await tf.loadGraphModel('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-models@2.0.0/dist/face-detection/ssd_mobilenet_v1/model.json');
-            console.log('Модель загружена');
+        async function setupCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 640, height: 480 },
+                audio: false
+            });
+            video.srcObject = stream;
+
+            return new Promise((resolve) => {
+                video.onloadedmetadata = () => {
+                    resolve(video);
+                };
+            });
         }
 
-        // Загрузка модели при старте
-        loadModel();
+        async function loadModelAndDetect() {
+            // Load the MoveNet model
+            const detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
 
-        // Слушатель для загрузки видео
-        videoInput.addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const videoURL = URL.createObjectURL(file);
-                videoElement.src = videoURL;
-                videoElement.play();
-            }
-        });
+            // Start detecting poses
+            async function detectPose() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Функция для обработки видео и анализа лиц
-        async function analyzeVideo() {
-            if (model && videoElement.readyState === 4) {
-                const videoTensor = tf.browser.fromPixels(videoElement);
-                const predictions = await model.executeAsync(videoTensor.expandDims(0));
+                // Draw the video on the canvas
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                // Распознавание лиц
-                const faces = predictions[0].arraySync();
+                // Detect poses
+                const poses = await detector.estimatePoses(video);
 
-                if (faces.length > 0) {
-                    // Лицо найдено в кадре
-                    if (!lastFaceDetected) {
-                        lastFaceDetected = true;
-                        attentionStatus.textContent = 'Внимание: Хорошо';
-                    }
+                // Check if a face or body is detected
+                if (poses.length > 0) {
+                    lastFaceDetected = true;
+                    statusDiv.style.display = 'none';
 
-                    // Отображение координат первого найденного лица
-                    const face = faces[0];
-                    const xCoord = face[0]; // X координата
-                    const yCoord = face[1]; // Y координата
+                    poses.forEach(pose => {
+                        // Draw keypoints
+                        pose.keypoints.forEach(({ x, y, score }) => {
+                            if (score > 0.5) { // Confidence threshold
+                                ctx.beginPath();
+                                ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                                ctx.fillStyle = 'red';
+                                ctx.fill();
+                            }
+                        });
 
-                    // Обновляем координаты
-                    coordX.textContent = `X: ${xCoord}`;
-                    coordY.textContent = `Y: ${yCoord}`;
+                        // Draw skeleton connections
+                        const skeleton = [
+                            [5, 6], [5, 11], [6, 12], [11, 12], [5, 7], [7, 9], [6, 8], [8, 10],
+                            [11, 13], [13, 15], [12, 14], [14, 16]
+                        ];
+                        skeleton.forEach(([start, end]) => {
+                            const kp1 = pose.keypoints[start];
+                            const kp2 = pose.keypoints[end];
+                            if (kp1.score > 0.5 && kp2.score > 0.5) {
+                                ctx.beginPath();
+                                ctx.moveTo(kp1.x, kp1.y);
+                                ctx.lineTo(kp2.x, kp2.y);
+                                ctx.lineWidth = 2;
+                                ctx.strokeStyle = 'blue';
+                                ctx.stroke();
+                            }
+                        });
+                    });
                 } else {
-                    // Лицо не найдено в кадре
                     if (lastFaceDetected) {
+                        statusDiv.textContent = 'Лицо не обнаружено';
+                        statusDiv.style.display = 'block';
                         lastFaceDetected = false;
-                        attentionStatus.textContent = 'Внимание: Отвлечен';
                     }
-
-                    // Если лица нет, скрываем координаты
-                    coordX.textContent = `X: 0`;
-                    coordY.textContent = `Y: 0`;
                 }
+
+                requestAnimationFrame(detectPose);
             }
+
+            detectPose();
         }
 
-        // Запуск анализа каждую секунду
-        setInterval(analyzeVideo, 1000);
-    </script>
+        async function main() {
+            await setupCamera();
+            video.play();
+            loadModelAndDetect();
+        }
 
+        main();
+    </script>
 </body>
 </html>
